@@ -1,0 +1,40 @@
+Project Notes [Updated: 11/15]
+1. Project is worth 15% of overall grade, not 10%.
+
+2. The number of vertices is between 1 and 10, but it does not mean that the vertices’ labels can only be 1 to 10. For example, the vertex label can be 11. And it is not necessarily continuous. The label can only be positive.
+
+3. The map id can be assume as letter and map ids are the only letters that occur in map.txt.
+
+4. The distance between two vertices and vertex numbers are integers. Speeds might not be integers.
+
+5. For each printed result, please keep two decimal precision.
+
+6. You are allowed to copy code about TCP/UDP connection from Beej, but please point them out in README and in the source file.
+
+7. There is a typo in the output table for server B. Please see more details @122 @169
+
+8. The <port number> are referring to its own port number. Eg. "AWS has sent ... over port <[AWS] port number>", "serverA is up and running ... on port <[serverA] port number>", etc. @163 @180
+
+9. Client will send the next query only after it gets the results of the previous query from aws.
+
+10. Any errors that appear after we send SIGINT (Ctrl+C) to terminate your running AWS/serverA/serverB is fine, but the client cannot return errors during runtime and/or after terminating by itself.
+
+11. If you are going to host your project on GitHub, MAKE SURE NOT TO MAKE IT PUBLIC. Questions with codes posted on Piazza should be published with Private visibility. Other students could find your codes while searching for resources online, which could lead to plagiarism (even if you seem to be innocent), which will lead to severe penalties.
+
+12. For submission, you should only include the required source code files, Makefile and the README file. Please don't put them in a folder and compress the folder (subfolder is also not allowed). Compress all the files directly and name it according to the rule in the instruction.
+
+13. The client output doesn't have to include the port number since it is dynamically assigned. All static ports should be printed.
+
+14. We can assume that every input is valid which means that we will not use map and node that does not exist.
+
+ 
+
+-------
+
+11.19
+
+ 
+
+15. The output of serverB will only have 1 length. See @127
+
+#pin
