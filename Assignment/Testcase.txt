@@ -1,0 +1,70 @@
+READ FIRST:
+
+Below is a sample map information.
+
+Please note all output here is only for you to compare the result. Please follow the instruction about how to format your output. Follow the output table to make your result easy to read and grade. Don't use the table format below. It may be different from the requirement!
+
+For more detail about the format in map.txt, you should check it on Piazza and don't make any assumption by yourself. 
+
+Thanks!
+
+
+
+Map
+-------
+
+A
+1.18
+8808038.4
+6 8 4
+6 7 6
+8 7 11
+8 9 8
+8 10 10
+7 9 13
+7 10 11
+10 9 7
+9 11 15
+10 11 3
+9 12 19
+10 12 1
+11 12 19
+11 13 4
+12 13 24
+
+
+Results
+--------
+
+-------------------------------------------------------
+Map ID 		Num Vertices 		Num Edges
+-------------------------------------------------------
+A		8 				15
+-------------------------------------------------------
+
+./client A 6 51539607552
+
+-----------------------------
+Destination      Min Length
+-----------------------------
+7			6
+8			4
+9			12
+10			14
+11			17
+12			15
+13 			21
+-----------------------------
+
+
+-------------------------------------------------------
+Destination 	Tt 		Tp 		Delay
+-------------------------------------------------------
+7 		731.43 		5.08		736.51
+8		731.43		3.39		734.82
+9		731.43		10.17		741.60
+10		731.43		11.86		743.29
+11		731.43		14.41		745.84
+12		731.43		12.71		744.14
+13		731.43		17.80		749.23
+-------------------------------------------------------
