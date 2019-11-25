@@ -76,10 +76,16 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <TargetName>$(ProjectName)</TargetName>
+    <TargetExt>.out</TargetExt>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+    <TargetName>$(ProjectName)</TargetName>
+    <TargetExt>.out</TargetExt>
+  </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="serverA.cpp" />
-  </ItemGroup>
-  <ItemGroup>
   </ItemGroup>
   <ItemDefinitionGroup />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
