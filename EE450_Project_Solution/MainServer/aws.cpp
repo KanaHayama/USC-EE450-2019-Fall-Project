@@ -45,7 +45,7 @@ public:
 		while (auto child = builder.Accept()) {
 			//receive from client
 			auto query = ClientQuery(*child);
-			cout << "The AWS has received map ID " << query.mapName << ", start vertex " << query.sourceNode << " and file size " << query.fileSize << " from the client using TCP over port <port number>" << endl;
+			cout << "The AWS has received map ID " << query.mapName << ", start vertex " << query.sourceNode << " and file size " << query.fileSize << " from the client using TCP over port " << SERVER_AWS_TCP_PORT << endl;
 
 			//forward to A
 			auto sendA = UdpSendSocketHelper(HOST, SERVER_A_PORT);

@@ -1,0 +1,28 @@
+Hi all,
+
+ 
+
+In the instruction, the client is asked to print out the port number. This is not required. All static ports (listed in Table 3) should be printed. The port for the client is dynamically assigned.
+
+ 
+
+It is ok if you finished the project printing it (good job!). But it is also fine if you don't print the client port number.
+
+ 
+
+The client output can be without the dynamic port number:
+
+The client has sent query to AWS using TCP: start vertex <vertex index>; map <map ID>; file size <file size>.
+ 
+
+Sorry for any inconvenience. And if you haven't started the project, please start it now. This is a hard deadline. No late submission will be allowed.
+
+ 
+
+Thanks,
+
+EE450 Team
+
+ 
+
+#pin

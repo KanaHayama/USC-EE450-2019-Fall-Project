@@ -34,7 +34,7 @@ public:
 
 	AllDelay Process(const ClientQuery& query) {
 		query.Encode(helper);
-		cout << "The client has sent query to AWS using TCP over port <port number>: start vertex " << query.sourceNode << "; map " << query.mapName << "; file size " << query.fileSize << "." << endl;
+		cout << "The client has sent query to AWS using TCP: start vertex " << query.sourceNode << "; map " << query.mapName << "; file size " << query.fileSize << "." << endl;
 
 		auto delay = AllDelay(helper);
 		cout << "The client has received results from AWS:" << endl;

@@ -219,59 +219,6 @@ public:
 	}
 };
 
-class UdpSendSocketHelper : public SocketHelper {
-private:
-	char writeBuffer[BUFFER_SIZE];
-	int writeBufferLen = 0;
-
-	const char* remoteHost;
-	const char* remotePort;
-
-	void WriteDatagram(const char* buffer, const int size) {
-		assert(writeBufferLen + size <= BUFFER_SIZE);
-		memcpy(writeBuffer + writeBufferLen, buffer, size);
-		writeBufferLen += size;
-	}
-public:
-	UdpSendSocketHelper(const char* _remoteHost, const char* _remotePort) : remoteHost(_remoteHost), remotePort(_remotePort){}
-
-	virtual void Read(char* buffer, const int size) {
-		assert(false);
-	}
-
-	virtual void Write(const char* buffer, const int size) {
-		WriteDatagram(buffer, size);
-	}
-
-	virtual void Flush() {
-		assert(remoteHost != nullptr);
-		addrinfo hints = {};
-		addrinfo* serverInfo;
-		addrinfo* p;
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_DGRAM;
-		if (getaddrinfo(remoteHost, remotePort, &hints, &serverInfo) != 0) {
-			exit(1);
-		}
-		int udpSocket;
-		for (p = serverInfo; p != nullptr; p = p->ai_next) {
-			if ((udpSocket = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-				continue;
-			}
-			break;
-		}
-		if (p == nullptr) {
-			exit(1);
-		}
-		auto sendLen = sendto(udpSocket, writeBuffer, writeBufferLen, 0, p->ai_addr, p->ai_addrlen);
-		assert(sendLen == writeBufferLen);
-		close(udpSocket);
-		freeaddrinfo(serverInfo);
-
-		writeBufferLen = 0;
-	}
-};
-
 class UdpReceiveSocketHelper : public SocketHelper {
 private:
 	char readBuffer[BUFFER_SIZE];
@@ -335,6 +282,65 @@ public:
 	}
 };
 
+class UdpSendSocketHelper : public SocketHelper {
+private:
+	char writeBuffer[BUFFER_SIZE];
+	int writeBufferLen = 0;
+
+	const char* remoteHost;
+	const char* remotePort;
+
+	void WriteDatagram(const char* buffer, const int size) {
+		assert(writeBufferLen + size <= BUFFER_SIZE);
+		memcpy(writeBuffer + writeBufferLen, buffer, size);
+		writeBufferLen += size;
+	}
+public:
+	UdpSendSocketHelper(const char* _remoteHost, const char* _remotePort) : remoteHost(_remoteHost), remotePort(_remotePort) {}
+
+	virtual void Read(char* buffer, const int size) {
+		assert(false);
+	}
+
+	virtual void Write(const char* buffer, const int size) {
+		WriteDatagram(buffer, size);
+	}
+
+	virtual void Flush() {
+		assert(remoteHost != nullptr);
+		addrinfo hints = {};
+		addrinfo* serverInfo;
+		addrinfo* p;
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_socktype = SOCK_DGRAM;
+		if (getaddrinfo(remoteHost, remotePort, &hints, &serverInfo) != 0) {
+			exit(1);
+		}
+		int udpSocket;
+		for (p = serverInfo; p != nullptr; p = p->ai_next) {
+			if ((udpSocket = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+				continue;
+			}
+			break;
+		}
+		if (p == nullptr) {
+			exit(1);
+		}
+		auto sendLen = sendto(udpSocket, writeBuffer, writeBufferLen, 0, p->ai_addr, p->ai_addrlen);
+		assert(sendLen == writeBufferLen);
+		close(udpSocket);
+		freeaddrinfo(serverInfo);
+
+		writeBufferLen = 0;
+	}
+};
+
+class Serializable {
+public:
+	virtual void Encode(SocketHelper& socket) const = 0;
+
+};
+
 struct MapInfo {
 
 	char name;
@@ -345,7 +351,7 @@ struct MapInfo {
 	MapInfo(const char _name, const PropagationSpeed_t& _propagationSpeed, const TransmissionSpeed_t& _transmissionSpeed) : name(_name), propagationSpeed(_propagationSpeed), transmissionSpeed(_transmissionSpeed) {}
 };
 
-struct AllShortestPath {
+struct AllShortestPath : public Serializable {
 	MapInfo mapInfo;
 	Node_t sourceNode;
 
@@ -366,7 +372,7 @@ struct AllShortestPath {
 		}
 	}
 
-	void Encode(SocketHelper& socket) const {
+	virtual void Encode(SocketHelper& socket) const {
 		socket.Write(mapInfo);
 		socket.Write(sourceNode);
 		int size = distances.size();
@@ -407,7 +413,7 @@ struct Delay {
 	}
 };
 
-struct AllDelay {
+struct AllDelay : public Serializable {
 
 	map<Node_t, Delay> delays;
 
@@ -429,7 +435,7 @@ struct AllDelay {
 		}
 	}
 
-	void Encode(SocketHelper& socket) const {
+	virtual void Encode(SocketHelper& socket) const {
 		int size = delays.size();
 		socket.Write(size);
 		for (const auto& d : delays) {
@@ -456,7 +462,7 @@ struct AllDelay {
 	}
 };
 
-struct ClientQuery {
+struct ClientQuery : public Serializable {
 	char mapName;
 	Node_t sourceNode;
 	FileSize_t fileSize;
@@ -469,7 +475,7 @@ struct ClientQuery {
 		socket.Read(fileSize);
 	}
 
-	void Encode(SocketHelper& socket) const {
+	virtual void Encode(SocketHelper& socket) const {
 		socket.Write(mapName);
 		socket.Write(sourceNode);
 		socket.Write(fileSize);
