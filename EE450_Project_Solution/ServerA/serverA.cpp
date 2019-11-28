@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
-#include <cassert>
+#include <string>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -23,6 +23,7 @@ using std::cout;
 using std::left;
 using std::setw;
 using std::endl;
+using std::string;
 
 //===============================================//
 //                    Const                      //
@@ -45,13 +46,49 @@ vector<string> Split(const string& str, const string& regexStr) {
 //                    Class                      //
 //===============================================//
 
+class FileNotFoundException : public EE450Exception {
+public:
+	explicit FileNotFoundException(const string& filename) :EE450Exception("Missing file \"" + filename + "\""){}
+};
+
+class MapFormatException : public ArgumentException {
+public:
+	explicit MapFormatException(const int lineNumber, const string& line) : ArgumentException("Worng map format at line " + std::to_string(lineNumber) + ": " + line) {}
+};
+
+class IllegalEdgeException : public ArgumentException{
+public:
+	explicit IllegalEdgeException(const Node_t& src, const Node_t& dest, const Distance_t& dist) : ArgumentException("Illegal edge from " + std::to_string(src) + " to " + std::to_string(dest) + " with distance " + std::to_string(dist)) {}
+};
+
+class EdgeExistedException : public ArgumentException {
+public:
+	explicit EdgeExistedException(const Node_t& src, const Node_t& dest) : ArgumentException("Edge from " + std::to_string(src) + " to " + std::to_string(dest) + " already existed") {}
+};
+
+class MapNotFoundException : public EE450Exception {
+public:
+	explicit MapNotFoundException(const char mapId) :EE450Exception("Map " + string(1, mapId) + " not found") {}
+};
+
+class VertexNotFoundException : public EE450Exception {
+public:
+	explicit VertexNotFoundException(const Node_t& node) :EE450Exception("Vertex " + std::to_string(node) + " not found") {}
+};
+
 class Map {
 private:
 	MapInfo mapInfo;
 	unordered_map<Node_t, map<Node_t, Distance_t>> value;
 
 	void AddDirectedEdge(const Node_t& src, const Node_t& dest, const Distance_t distance) {
+		if (src == dest || distance < 0) {
+			throw IllegalEdgeException(src, dest, distance);
+		}
 		auto ret = value.emplace(src, map<Node_t, Distance_t>());
+		if (!ret.second) {
+			//throw EdgeExistedException(src, dest);
+		}
 		auto& edges = ret.first->second;
 		edges[dest] = distance;
 	}
@@ -77,6 +114,9 @@ public:
 	}
 
 	AllShortestPath CalcShortestPath(const Node_t& src) const {
+		if (value.find(src) == value.end()) {
+			throw VertexNotFoundException(src);
+		}
 		auto result = AllShortestPath(mapInfo, src);
 		//Dijkstra
 		auto included = unordered_set<Node_t>();
@@ -129,6 +169,9 @@ private:
 	void BuildFromFile(const string& filename) {
 		maps = map<char, Map>();
 		auto file = std::ifstream(filename);
+		if (!file.is_open()) {
+			throw FileNotFoundException(filename);
+		}
 		auto state = ReadLineState::Normal;
 		string name;
 		PropagationSpeed_t pSpeed;
@@ -138,41 +181,48 @@ private:
 		Node_t dest;
 		Distance_t dist;
 		Map map;
+		int lineNumber = 0;
 		for (string line; getline(file, line);) {
+			lineNumber++;
+			if (line.size() == 0 || std::all_of(line.begin(), line.end(), isspace)) {
+				continue;
+			}
 			auto tokens = Split(line, R"(\s+)");
-			switch (state) {
-			case ReadLineState::Normal:
-				switch (tokens.size()) {
-				case 1:
-					if (!name.empty()) {
-						maps[info.name] = std::move(map);
+			try {
+				switch (state) {
+				case ReadLineState::Normal:
+					switch (tokens.size()) {
+					case 1:
+						if (!name.empty()) {
+							maps[info.name] = std::move(map);
+						}
+						name = tokens[0];
+						state = ReadLineState::PropagationSpeed;
+						break;
+					case 3:
+						src = std::stoi(tokens[0]);
+						dest = std::stoi(tokens[1]);
+						dist = std::stoi(tokens[2]);
+						map.AddUndirectedEdge(src, dest, dist);
+						break;
+					default:
+						throw std::invalid_argument(line);
 					}
-					name = tokens[0];
-					state = ReadLineState::PropagationSpeed;
 					break;
-				case 3:
-					src = std::stoi(tokens[0]);
-					dest = std::stoi(tokens[1]);
-					dist = std::stoi(tokens[2]);
-					map.AddUndirectedEdge(src, dest, dist);
+				case ReadLineState::PropagationSpeed:
+					pSpeed = std::stod(tokens[0]);
+					state = ReadLineState::TransmissionSpeed;
 					break;
-				default:
-					throw InvalidInputException();
+				case ReadLineState::TransmissionSpeed:
+					tSpeed = std::stod(tokens[0]);
+					assert(name.size() == 1);
+					info = MapInfo(name[0], pSpeed, tSpeed);
+					map = Map(info);
+					state = ReadLineState::Normal;
+					break;
 				}
-				break;
-			case ReadLineState::PropagationSpeed:
-				pSpeed = std::stod(tokens[0]);
-				state = ReadLineState::TransmissionSpeed;
-				break;
-			case ReadLineState::TransmissionSpeed:
-				tSpeed = std::stod(tokens[0]);
-				assert(name.size() == 1);
-				info = MapInfo(name[0], pSpeed, tSpeed);
-				map = Map(info);
-				state = ReadLineState::Normal;
-				break;
-			default:
-				break;
+			} catch (...) {
+				throw MapFormatException(lineNumber, line);
 			}
 		}
 		maps[info.name] = std::move(map);
@@ -198,6 +248,9 @@ public:
 	}
 
 	AllShortestPath CalcShortestPath(const char map, const Node_t& src) const {
+		if (maps.find(map) == maps.end()) {
+			throw MapNotFoundException(map);
+		}
 		return maps.at(map).CalcShortestPath(src);
 	}
 };
@@ -219,19 +272,20 @@ public:
 			cout << "The Server A has identified the following shortest paths:" << endl;
 			shortestPath.Print();
 
-			auto sendHelper = UdpSendSocketHelper(HOST, SERVER_AWS_UDP_PORT);
-			shortestPath.Encode(sendHelper);
+			auto sendHelper = receiveHelper.SendHelper(HOST, SERVER_AWS_UDP_PORT);
+			shortestPath.Encode(*sendHelper);
 			cout << "The Server A has sent shortest paths to AWS." << endl;
 		}
 	}
 };
 
 int main() {
-	auto conn = Connection();
-
-	auto manager = MapManager();
-	
-	conn.Process(manager);
-
+	try {
+		auto conn = Connection();
+		auto manager = MapManager();
+		conn.Process(manager);
+	} catch (const std::exception & ex) {
+		std::cerr << ex.what() << endl;
+	}
 	return 0;
 }

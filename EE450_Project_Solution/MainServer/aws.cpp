@@ -48,31 +48,35 @@ public:
 			cout << "The AWS has received map ID " << query.mapName << ", start vertex " << query.sourceNode << " and file size " << query.fileSize << " from the client using TCP over port " << SERVER_AWS_TCP_PORT << endl;
 
 			//forward to A
-			auto sendA = UdpSendSocketHelper(HOST, SERVER_A_PORT);
-			query.Encode(sendA);
-			cout << "The AWS has sent map ID and starting vertex to server A using UDP over port <port number>" << endl;
+			auto sendA = udpReceiveHelper.SendHelper(HOST, SERVER_A_PORT);
+			query.Encode(*sendA);
+			cout << "The AWS has sent map ID and starting vertex to server A using UDP over port " << SERVER_AWS_UDP_PORT << "." << endl;
 			auto shortestPath = AllShortestPath(udpReceiveHelper);
 			cout << "The AWS has received shortest path from server A:" << endl;
 			shortestPath.Print();
 
 			//forward to B
-			auto sendB = UdpSendSocketHelper(HOST, SERVER_B_PORT);
-			query.Encode(sendB);
-			shortestPath.Encode(sendB);
-			cout << "The AWS has sent path length, propagation speed and transmission speed to server B using UDP over port <port number>." << endl;
+			auto sendB = udpReceiveHelper.SendHelper(HOST, SERVER_B_PORT);
+			query.Encode(*sendB);
+			shortestPath.Encode(*sendB);
+			cout << "The AWS has sent path length, propagation speed and transmission speed to server B using UDP over port " << SERVER_AWS_UDP_PORT <<"." << endl;
 			auto delay = AllDelay(udpReceiveHelper);
 			cout << "The AWS has received delays from server B:" << endl;
 			delay.Print();
 
 			//send to client
 			delay.Encode(*child);
-			cout << "The AWS has sent calculated delay to client using TCP over port <port number>." << endl;
+			cout << "The AWS has sent calculated delay to client using TCP over port " << SERVER_AWS_TCP_PORT << "." << endl;
 		}
 	}
 };
 
 int main() {
-	auto client = Connection();
-	client.Process();
+	try {
+		auto client = Connection();
+		client.Process();
+	} catch (const std::exception & ex) {
+		std::cerr << ex.what() << endl;
+	}
 	return 0;
 }

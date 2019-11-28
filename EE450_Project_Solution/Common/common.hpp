@@ -59,9 +59,60 @@ const char* SERVER_AWS_TCP_PORT = "24943";
 //                    Class                      //
 //===============================================//
 
-class EE450Exception : std::exception {};
+class EE450Exception : public std::runtime_error {
+protected:
+	explicit EE450Exception(const string& message) : std::runtime_error(message) {}
+};
 
-class InvalidInputException : EE450Exception {};
+class UnsupportedOperationException : public EE450Exception {
+public:
+	explicit UnsupportedOperationException() : EE450Exception("Unsupported operation") {}
+};
+
+class ArgumentException : public EE450Exception {
+public:
+	explicit ArgumentException(const string& message) : EE450Exception(message) {}
+};
+
+class SocketException : public EE450Exception {
+protected:
+	explicit SocketException(const string& message) : EE450Exception(message) {}
+};
+
+class ResolveException : public SocketException {
+public:
+	explicit ResolveException(const char* host, const char* port) : SocketException("Cannot resolve address " + (host == nullptr ? string(HOST) : host) + ":" + port) {}
+};
+
+class MultipleRemoteHostException : public SocketException {
+public:
+	explicit MultipleRemoteHostException(const char* host, const char* port) : SocketException("Multiple remote address " + (host == nullptr ? string(HOST) : host) + ":" + port + " founded") {}
+};
+
+class ServerSetupException : public SocketException {
+public:
+	explicit ServerSetupException(const char* port, const bool udp) : SocketException("Cannot bind to / listen at port " + string(port) + ", please run command \"fuser -k " + string(port) + "/" + (udp ? "udp" : "tcp") + "\" then retry") {}
+};
+
+class ConnectException : public SocketException {
+public:
+	explicit ConnectException(const char* host, const char* port) : SocketException("Cannot connect to " + (host == nullptr ? string(HOST) : host) + ":" + port) {}
+};
+
+class TooLargePayloadException : public EE450Exception {
+public:
+	explicit TooLargePayloadException() : EE450Exception("The size of payload is larger than the max supported size " + std::to_string(BUFFER_SIZE)) {}
+};
+
+class PayloadSizeMismatchException : public EE450Exception {
+public:
+	explicit PayloadSizeMismatchException() : EE450Exception("Required payload size is larger than the received size") {}
+};
+
+class SendLengthMismatchException : public EE450Exception {
+public:
+	explicit SendLengthMismatchException() : EE450Exception("Payload is not sended entirelly") {}
+};
 
 class SocketHelper {
 protected:
@@ -122,6 +173,7 @@ public:
 	virtual void Write(const char* buffer, const int size) {
 		WriteStream(tcpSocket, buffer, size);
 	}
+
 	virtual void Flush() { }
 };
 
@@ -137,7 +189,7 @@ public:
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
 		if (getaddrinfo(_remoteHost, _remotePort, &hints, &serverInfo) != 0) {
-			exit(1);
+			throw ResolveException(_remoteHost, _remotePort);
 		}
 		for (p = serverInfo; p != nullptr; p = p->ai_next) {
 			if ((tcpSocket = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
@@ -150,7 +202,7 @@ public:
 			break;
 		}
 		if (p == nullptr) {
-			exit(1);
+			throw ConnectException(_remoteHost, _remotePort);
 		}
 		freeaddrinfo(serverInfo);
 	}
@@ -176,7 +228,9 @@ private:
 
 public:
 	TcpServerSocketBuilder(const char* _selfPort) {
-		assert(_selfPort != nullptr);
+		if (_selfPort == nullptr) {
+			throw ArgumentException("Self port number is null");
+		}
 		addrinfo hints = {};
 		addrinfo* serverInfo;
 		addrinfo* p;
@@ -184,7 +238,7 @@ public:
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 		if (getaddrinfo(nullptr, _selfPort, &hints, &serverInfo) != 0) {
-			exit(1);
+			throw ResolveException(nullptr, _selfPort);
 		}
 		for (p = serverInfo; p != nullptr; p = p->ai_next) {
 			if ((tcpSocket = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
@@ -192,6 +246,7 @@ public:
 			}
 			if (bind(tcpSocket, p->ai_addr, p->ai_addrlen) != 0) {
 				close(tcpSocket);
+				tcpSocket = -1;
 				continue;
 			}
 			if (listen(tcpSocket, CONNECTION_LIMIT) != 0) {
@@ -201,7 +256,7 @@ public:
 			break;
 		}
 		if (p == nullptr) {
-			exit(1);
+			throw ServerSetupException(_selfPort, false);
 		}
 		freeaddrinfo(serverInfo);
 	}
@@ -219,36 +274,103 @@ public:
 	}
 };
 
-class UdpReceiveSocketHelper : public SocketHelper {
-private:
-	char readBuffer[BUFFER_SIZE];
-	int readBufferLen = 0;
-	int readIndex = 0;
+class UdpSocketHelper : public SocketHelper {
+protected:
+	char buffer[BUFFER_SIZE];
+	int bufferLength = 0;
+	int udpSocket = -1;
+};
 
-	int udpSocket = 0;
+class UdpReceiveSocketHelper;
+
+class UdpSendSocketHelper : public UdpSocketHelper {
+private:
+	const char* remoteHost;
+	const char* remotePort;
+
+	friend class UdpReceiveSocketHelper;
+
+	void WriteDatagram(const char* buffer, const int size) {
+		if (bufferLength + size > BUFFER_SIZE) {
+			throw TooLargePayloadException();
+		}
+		memcpy(this->buffer + bufferLength, buffer, size);
+		bufferLength += size;
+	}
+
+	UdpSendSocketHelper(const int _udpSocket, const char* _remoteHost, const char* _remotePort) : remoteHost(_remoteHost), remotePort(_remotePort) {
+		udpSocket = _udpSocket;
+
+		if (remoteHost == nullptr || remotePort == nullptr) {
+			throw ArgumentException("Remote host is null");
+		}
+		if (udpSocket < 0) {
+			throw ArgumentException("Illegal socket handler");
+		}
+	}
+public:
+
+
+	virtual void Read(char* buffer, const int size) {
+		throw UnsupportedOperationException();
+	}
+
+	virtual void Write(const char* buffer, const int size) {
+		WriteDatagram(buffer, size);
+	}
+
+	virtual void Flush() {
+		addrinfo hints = {};
+		addrinfo* serverInfo = nullptr;
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_socktype = SOCK_DGRAM;
+		if (getaddrinfo(remoteHost, remotePort, &hints, &serverInfo) != 0) {
+			throw ResolveException(remoteHost, remotePort);
+		}
+		assert(serverInfo != nullptr);
+		if (serverInfo->ai_next != nullptr) {
+			throw MultipleRemoteHostException(remoteHost, remotePort);
+		}
+		auto sendLen = sendto(udpSocket, buffer, bufferLength, 0, serverInfo->ai_addr, serverInfo->ai_addrlen);
+		if (sendLen != bufferLength) {
+			throw SendLengthMismatchException();
+		}
+		freeaddrinfo(serverInfo);
+
+		bufferLength = 0;
+	}
+};
+
+class UdpReceiveSocketHelper : public UdpSocketHelper {
+private:
+	int readIndex = 0;
 
 	addrinfo* serverInfo = nullptr;
 	addrinfo* p;
 
 	void ReadDatagram(const int udpSocket, char* buffer, const int size) {
-		assert(readIndex <= readBufferLen);
-		if (readIndex == readBufferLen) {
-			readBufferLen = recvfrom(udpSocket, readBuffer, BUFFER_SIZE, 0, p->ai_addr, &p->ai_addrlen);
+		assert(readIndex <= bufferLength);
+		if (readIndex == bufferLength) {
+			bufferLength = recvfrom(udpSocket, this->buffer, BUFFER_SIZE, 0, p->ai_addr, &p->ai_addrlen);
 			readIndex = 0;
 		}
-		assert(readIndex + size <= readBufferLen);
-		memcpy(buffer, readBuffer + readIndex, size);
+		if (readIndex + size > bufferLength) {
+			throw PayloadSizeMismatchException();
+		}
+		memcpy(buffer, this->buffer + readIndex, size);
 		readIndex += size;
 	}
 public:
 	UdpReceiveSocketHelper(const char* _selfPort) {
-		assert(_selfPort != nullptr);
+		if (_selfPort == nullptr) {
+			throw ArgumentException("Self port number is null");
+		}
 		addrinfo hints = {};
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_DGRAM;
 		hints.ai_flags = AI_PASSIVE;
 		if (getaddrinfo(nullptr, _selfPort, &hints, &serverInfo) != 0) {
-			exit(1);
+			throw ResolveException(nullptr, _selfPort);
 		}
 		for (p = serverInfo; p != nullptr; p = p->ai_next) {
 			if ((udpSocket = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
@@ -261,7 +383,7 @@ public:
 			break;
 		}
 		if (p == nullptr) {
-			exit(1);
+			throw ServerSetupException(_selfPort, true);
 		}
 	}
 
@@ -269,69 +391,20 @@ public:
 		freeaddrinfo(serverInfo);
 	}
 
+	std::unique_ptr<UdpSendSocketHelper> SendHelper(const char* _remoteHost, const char* _remotePort) {
+		return std::unique_ptr<UdpSendSocketHelper>(new UdpSendSocketHelper(udpSocket, _remoteHost, _remotePort));
+	}
+
 	virtual void Read(char* buffer, const int size) {
 		ReadDatagram(udpSocket, buffer, size);
 	}
 
 	virtual void Write(const char* buffer, const int size) {
-		assert(false);
+		throw UnsupportedOperationException();
 	}
 
 	virtual void Flush() {
-		assert(false);
-	}
-};
-
-class UdpSendSocketHelper : public SocketHelper {
-private:
-	char writeBuffer[BUFFER_SIZE];
-	int writeBufferLen = 0;
-
-	const char* remoteHost;
-	const char* remotePort;
-
-	void WriteDatagram(const char* buffer, const int size) {
-		assert(writeBufferLen + size <= BUFFER_SIZE);
-		memcpy(writeBuffer + writeBufferLen, buffer, size);
-		writeBufferLen += size;
-	}
-public:
-	UdpSendSocketHelper(const char* _remoteHost, const char* _remotePort) : remoteHost(_remoteHost), remotePort(_remotePort) {}
-
-	virtual void Read(char* buffer, const int size) {
-		assert(false);
-	}
-
-	virtual void Write(const char* buffer, const int size) {
-		WriteDatagram(buffer, size);
-	}
-
-	virtual void Flush() {
-		assert(remoteHost != nullptr);
-		addrinfo hints = {};
-		addrinfo* serverInfo;
-		addrinfo* p;
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_DGRAM;
-		if (getaddrinfo(remoteHost, remotePort, &hints, &serverInfo) != 0) {
-			exit(1);
-		}
-		int udpSocket;
-		for (p = serverInfo; p != nullptr; p = p->ai_next) {
-			if ((udpSocket = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-				continue;
-			}
-			break;
-		}
-		if (p == nullptr) {
-			exit(1);
-		}
-		auto sendLen = sendto(udpSocket, writeBuffer, writeBufferLen, 0, p->ai_addr, p->ai_addrlen);
-		assert(sendLen == writeBufferLen);
-		close(udpSocket);
-		freeaddrinfo(serverInfo);
-
-		writeBufferLen = 0;
+		throw UnsupportedOperationException();
 	}
 };
 
@@ -391,13 +464,13 @@ struct AllShortestPath : public Serializable {
 	void Print() const {
 		const int colWidth[] = { 13, 12};
 		cout << left;
-		cout << "-----------------------------" << endl;
+		cout << "-------------------------------------" << endl;
 		cout << setw(colWidth[0]) << "Destination" << setw(colWidth[1]) << "Min Length" << endl;
-		cout << "-----------------------------" << endl;
+		cout << "-------------------------------------" << endl;
 		for (const auto& p : distances) {
 			cout << setw(colWidth[0]) << p.first << setw(colWidth[1]) << p.second << endl;
 		}
-		cout << "-----------------------------" << endl;
+		cout << "-------------------------------------" << endl;
 	}
 };
 
@@ -406,7 +479,7 @@ struct Delay {
 	Delay_t propagation = 0;
 
 	Delay() {};
-	Delay(const FileSize_t& fileSize, const MapInfo& mapInfo, const Distance_t& distance) : transmission(mapInfo.transmissionSpeed * fileSize / BYTE_SIZE), propagation(mapInfo.propagationSpeed * distance) {}
+	Delay(const Delay_t& _transmission, const Delay_t& _propagation) : transmission(_transmission), propagation(_propagation) {}
 
 	Delay_t Total() const {
 		return transmission + propagation;
@@ -414,14 +487,11 @@ struct Delay {
 };
 
 struct AllDelay : public Serializable {
+protected:
+	AllDelay() {}
 
+public:
 	map<Node_t, Delay> delays;
-
-	AllDelay(const FileSize_t& fileSize, const AllShortestPath& allShortestPath) {
-		for (const auto& record : allShortestPath.distances) {
-			AddDelay(record.first, Delay(fileSize, allShortestPath.mapInfo, record.second));
-		}
-	}
 
 	AllDelay(SocketHelper& socket) {
 		int size;
@@ -445,20 +515,21 @@ struct AllDelay : public Serializable {
 		socket.Flush();
 	}
 
-	void AddDelay(const Node_t& dest, const Delay& delay) {
-		delays[dest] = delay;
-	}
-
 	void Print() const {
 		const int colWidth[] = { 13, 20, 20, 20};
 		cout << left << std::fixed << std::showpoint << std::setprecision(FLOAT_PRECISION);
-		cout << "-------------------------------------------------------" << endl;
+		cout << "---------------------------------------------------------------------" << endl;
 		cout << setw(colWidth[0]) << "Destination" << setw(colWidth[1]) << "Tt" << setw(colWidth[2]) << "Tp" << setw(colWidth[3]) << "Delay" << endl;
-		cout << "-------------------------------------------------------" << endl;
+		cout << "---------------------------------------------------------------------" << endl;
 		for (const auto& d : delays) {
 			cout << setw(colWidth[0]) << d.first << setw(colWidth[1]) << d.second.transmission << setw(colWidth[2]) << d.second.propagation << setw(colWidth[3]) << d.second.Total() << endl;
 		}
-		cout << "-------------------------------------------------------" << endl;
+		cout << "---------------------------------------------------------------------" << endl;
+	}
+
+protected:
+	void AddDelay(const Node_t& dest, const Delay& delay) {
+		delays[dest] = delay;
 	}
 };
 

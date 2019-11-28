@@ -1,5 +1,5 @@
-#include <cassert>
 #include <iostream>
+#include <regex>
 
 #include <sys/socket.h>
 #include <netdb.h>
@@ -18,6 +18,30 @@ using std::endl;
 //===============================================//
 //                     Tool                      //
 //===============================================//
+
+ClientQuery Phrase(int argc, char* argv[]) {
+	if (argc != 4) {
+		throw ArgumentException("Wrong number of argument");
+	}
+	auto name = string(argv[1]);
+	if (!std::regex_match(name, std::regex("^[a-zA-z]$"))) {
+		throw ArgumentException("Map ID should be exactly 1 alphabet");
+	}
+	auto nameId = name[0];
+	Node_t source;
+	try {
+		source = std::stoll(argv[2]);
+	} catch (...) {
+		throw ArgumentException("Wrong source vertex id");
+	}
+	FileSize_t filesize;
+	try {
+		filesize = std::stoll(argv[3]);
+	} catch (...) {
+		throw ArgumentException("Wrong file size");
+	}
+	return ClientQuery(nameId, source, filesize);
+}
 
 //===============================================//
 //                    Class                      //
@@ -44,12 +68,12 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-	assert(argc == 4);
-	auto name = string(argv[1]);
-	assert(name.size() == 1);
-	auto query = ClientQuery(name[0], std::stoi(argv[2]), std::stoll(argv[3]));
-
-	auto conn = Connection();
-	auto delay = conn.Process(query);
+	try {
+		auto query = Phrase(argc, argv);
+		auto conn = Connection();
+		auto delay = conn.Process(query);
+	} catch (const std::exception & ex) {
+		std::cerr << ex.what() << endl;
+	}
 	return 0;
 }
