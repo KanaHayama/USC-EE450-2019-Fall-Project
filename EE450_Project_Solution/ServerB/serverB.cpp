@@ -13,8 +13,6 @@ using std::endl;
 //                    Const                      //
 //===============================================//
 
-
-
 //===============================================//
 //                     Tool                      //
 //===============================================//
@@ -23,6 +21,7 @@ using std::endl;
 //                    Class                      //
 //===============================================//
 
+// delay calculation logic
 struct DefaultDelay : public AllDelay {
 private:
 	static Delay_t CalcTransmissionDelay(const FileSize_t& fileSize, const MapInfo& mapInfo, const Distance_t& distance) {

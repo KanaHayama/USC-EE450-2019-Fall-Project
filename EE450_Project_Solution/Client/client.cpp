@@ -7,19 +7,19 @@
 #include "common.hpp"
 
 using std::cout;
+using std::left;
+using std::setw;
 using std::endl;
 
 //===============================================//
 //                    Const                      //
 //===============================================//
 
-
-
 //===============================================//
 //                     Tool                      //
 //===============================================//
-
-ClientQuery Phrase(int argc, char* argv[]) {
+// parse command line arugments
+ClientQuery Parse(int argc, char* argv[]) {
 	if (argc != 4) {
 		throw ArgumentException("Wrong number of argument");
 	}
@@ -56,22 +56,22 @@ public:
 		cout << "The client is up and running." << endl;
 	}
 
-	AllDelay Process(const ClientQuery& query) {
+	Response Process(const ClientQuery& query) {
 		query.Encode(helper);
 		cout << "The client has sent query to AWS using TCP: start vertex " << query.sourceNode << "; map " << query.mapName << "; file size " << query.fileSize << "." << endl;
 
-		auto delay = AllDelay(helper);
+		auto response = Response(helper);
 		cout << "The client has received results from AWS:" << endl;
-		delay.Print();
-		return delay;
+		response.Print();
+		return response;
 	}
 };
 
 int main(int argc, char* argv[]) {
 	try {
-		auto query = Phrase(argc, argv);
+		auto query = Parse(argc, argv);
 		auto conn = Connection();
-		auto delay = conn.Process(query);
+		auto response = conn.Process(query);
 	} catch (const std::exception & ex) {
 		std::cerr << ex.what() << endl;
 	}

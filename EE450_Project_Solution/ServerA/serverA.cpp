@@ -35,6 +35,7 @@ const string MAP_FILENAME = "map.txt";
 //                     Tool                      //
 //===============================================//
 
+// split string to tokens
 vector<string> Split(const string& str, const string& regexStr) {
 	auto regex = std::regex(regexStr);
 	auto begin = std::sregex_token_iterator(str.begin(), str.end(), regex, -1);
@@ -120,7 +121,7 @@ public:
 		auto result = AllShortestPath(mapInfo, src);
 		//Dijkstra
 		auto included = unordered_set<Node_t>();
-		auto& distance = result.distances;
+		auto& distance = result.distances; // directly update result's field
 		// init
 		distance[src] = 0;
 		// calc
@@ -151,7 +152,7 @@ public:
 				}
 			}
 		}
-		distance.erase(src);
+		distance.erase(src); // remove source node from result
 		return result;
 	}
 };
@@ -182,9 +183,9 @@ private:
 		Distance_t dist;
 		Map map;
 		int lineNumber = 0;
-		for (string line; getline(file, line);) {
+		for (string line; getline(file, line);) { // read lines
 			lineNumber++;
-			if (line.size() == 0 || std::all_of(line.begin(), line.end(), isspace)) {
+			if (line.size() == 0 || std::all_of(line.begin(), line.end(), isspace)) {// empty line
 				continue;
 			}
 			auto tokens = Split(line, R"(\s+)");
@@ -192,14 +193,14 @@ private:
 				switch (state) {
 				case ReadLineState::Normal:
 					switch (tokens.size()) {
-					case 1:
+					case 1:// new map id
 						if (!name.empty()) {
-							maps[info.name] = std::move(map);
+							maps[info.name] = std::move(map); // store last map
 						}
 						name = tokens[0];
 						state = ReadLineState::PropagationSpeed;
 						break;
-					case 3:
+					case 3:// new edge
 						src = std::stoi(tokens[0]);
 						dest = std::stoi(tokens[1]);
 						dist = std::stoi(tokens[2]);
@@ -216,7 +217,7 @@ private:
 				case ReadLineState::TransmissionSpeed:
 					tSpeed = std::stod(tokens[0]);
 					assert(name.size() == 1);
-					info = MapInfo(name[0], pSpeed, tSpeed);
+					info = MapInfo(name[0], pSpeed, tSpeed); // assembly map info
 					map = Map(info);
 					state = ReadLineState::Normal;
 					break;
@@ -225,7 +226,7 @@ private:
 				throw MapFormatException(lineNumber, line);
 			}
 		}
-		maps[info.name] = std::move(map);
+		maps[info.name] = std::move(map); // store last map
 	}
 
 	void Print() const {
@@ -258,6 +259,7 @@ public:
 class Connection {
 private:
 	UdpReceiveSocketHelper receiveHelper;
+
 public:
 	Connection() : receiveHelper(UdpReceiveSocketHelper(SERVER_A_PORT)) {
 		cout << "The Server A is up and running using UDP on port " << SERVER_A_PORT << "." << endl;

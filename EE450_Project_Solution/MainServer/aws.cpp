@@ -14,14 +14,9 @@ using std::endl;
 //                   typedef                     //
 //===============================================//
 
-typedef AllShortestPath (*ServerA)(const ClientQuery& query);
-typedef AllDelay(*ServerB)(const FileSize_t& fileSize, const AllShortestPath& allShortestPath);
-
 //===============================================//
 //                    Const                      //
 //===============================================//
-
-
 
 //===============================================//
 //                     Tool                      //
@@ -47,7 +42,7 @@ public:
 			auto query = ClientQuery(*child);
 			cout << "The AWS has received map ID " << query.mapName << ", start vertex " << query.sourceNode << " and file size " << query.fileSize << " from the client using TCP over port " << SERVER_AWS_TCP_PORT << endl;
 
-			//forward to A
+			//query server A
 			auto sendA = udpReceiveHelper.SendHelper(HOST, SERVER_A_PORT);
 			query.Encode(*sendA);
 			cout << "The AWS has sent map ID and starting vertex to server A using UDP over port " << SERVER_AWS_UDP_PORT << "." << endl;
@@ -55,7 +50,7 @@ public:
 			cout << "The AWS has received shortest path from server A:" << endl;
 			shortestPath.Print();
 
-			//forward to B
+			//query server B
 			auto sendB = udpReceiveHelper.SendHelper(HOST, SERVER_B_PORT);
 			query.Encode(*sendB);
 			shortestPath.Encode(*sendB);
@@ -64,8 +59,9 @@ public:
 			cout << "The AWS has received delays from server B:" << endl;
 			delay.Print();
 
-			//send to client
-			delay.Encode(*child);
+			//response to client
+			auto response = Response(shortestPath, delay);
+			response.Encode(*child);
 			cout << "The AWS has sent calculated delay to client using TCP over port " << SERVER_AWS_TCP_PORT << "." << endl;
 		}
 	}
